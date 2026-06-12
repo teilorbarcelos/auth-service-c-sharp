@@ -1,0 +1,6 @@
+projectKey=teilorbarcelos_auth-service-csharp
+serverUrl=http://localhost:9000
+serverVersion=10.5.1.90531
+dashboardUrl=http://localhost:9000/dashboard?id=teilorbarcelos_auth-service-csharp
+ceTaskId=513e0b26-71db-4ea7-9877-4bf3b62f256e
+ceTaskUrl=http://localhost:9000/api/ce/task?id=513e0b26-71db-4ea7-9877-4bf3b62f256e
