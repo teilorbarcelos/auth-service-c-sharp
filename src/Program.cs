@@ -123,7 +123,8 @@ try
     }
 
     var serverUrl = $"http://localhost:{port}";
-    Log.Information("Server ready at {ServerUrl} | Docs: {ServerUrl}/v1/docs", serverUrl, serverUrl);
+    var docsUrl = $"{serverUrl}/v1/docs";
+    Log.Information("Server ready at {ServerUrl} | Docs: {DocsUrl}", serverUrl, docsUrl);
 
     await app.RunAsync();
 }
