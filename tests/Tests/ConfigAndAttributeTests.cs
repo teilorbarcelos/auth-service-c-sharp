@@ -50,6 +50,13 @@ namespace MageBackend.Tests
             Assert.Throws<AppException>(() => attr.OnAuthorization(ctx));
         }
 
+        [Fact]
+        public void FeatureNameAttribute_StoresName()
+        {
+            var attr = new FeatureNameAttribute("test-feature");
+            Assert.Equal("test-feature", attr.Name);
+        }
+
         private static AuthorizationFilterContext CreateContext(Claim[] claims)
         {
             var httpContext = new DefaultHttpContext();

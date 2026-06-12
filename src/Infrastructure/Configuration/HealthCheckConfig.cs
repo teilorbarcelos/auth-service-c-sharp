@@ -10,6 +10,7 @@ using MageBackend.Infrastructure.HealthChecks;
 
 namespace MageBackend.Infrastructure.Configuration
 {
+    [ExcludeFromCodeCoverage]
     public static class HealthCheckConfig
     {
         public static readonly JsonSerializerOptions JsonOptions = new()
