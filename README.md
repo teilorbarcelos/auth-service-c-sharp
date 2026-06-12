@@ -1,251 +1,143 @@
-# Advanced C# (ASP.NET Core) Backend API Boilerplate
+# Auth Service (C#/.NET) 🔐
 
-Arquitetura robusta, moderna e de alta performance construída com **C#**, **ASP.NET Core 10.0** e **Entity Framework Core**. Adota **Vertical Slice Architecture (VSA)** com fatias funcionais de baixo acoplamento e alta coesão.
+Microsserviço de autenticação dedicado, extraído do `backend-c-sharp`.
+Plug-and-play com o monólito: setar `AUTH_MODE=remote` no monólito e subir este serviço na porta `8001`.
 
 ---
 
-## Tecnologias Core
+## 🚀 Tecnologias
 
 - **Runtime & SDK:** .NET 10.0
 - **Framework Web:** ASP.NET Core Web API
-- **ORM:** Entity Framework Core 10
-- **Banco de Dados:** SQL Server + Redis (cache de sessões, rate limit)
-- **Mensageria:** RabbitMQ com DLX/DLQ, retry, Publisher Confirms
-- **Documentação:** OpenAPI 3.0 via `v1/docs`
-- **Observabilidade:** OpenTelemetry (OTLP) + Prometheus + Grafana
-- **Qualidade:** SonarQube + Husky + dotnet format
-- **Testes:** xUnit + Testcontainers (SQL/Redis/RabbitMQ reais)
-- **CI/CD:** GitHub Actions
+- **ORM:** Entity Framework Core 10 (SQL Server)
+- **Cache/Sessão:** Redis (StackExchange.Redis)
+- **Autenticação:** JWT (HS256) + BCrypt
+- **Validação:** FluentValidation
+- **CQRS:** MediatR
+- **Documentação:** Swagger / OpenAPI 3.0 (`/v1/docs`)
 
 ---
 
-## Arquitetura
+## 🔌 Plug-and-Play: Monolito → Microsserviço
 
-### Vertical Slice Architecture (VSA)
+O `auth-service-csharp` substitui o módulo de autenticação do `backend-c-sharp` sem alterar o middleware JWT, o RBAC ou a sessão Redis.
 
-Código organizado em **Feature Slices** em `src/Features/`. Cada pasta contém todo o ciclo da funcionalidade: Controller, Command/Query DTOs, Validadores, Handlers e Mappers. Sem camadas Service/Repository genéricas.
+### Como funciona
 
 ```
-src/
-├── Core/             → Primitivas de domínio e CQRS
-├── Domain/           → BaseEntity, SearchRequest
-├── Shared/           → QueryableExtensions, Cqrs, DateTimeHelper
-├── Web/              → Controllers base, Middleware, Filters
-├── Database/         → DbContext, Migrations, Entities
-├── Infrastructure/   → Auth, Messaging, Pdf, Storage, Auditing, HealthChecks, Configuration
-├── Features/         → Auth, User, Role, Feature, Product, Storage, Dashboard, AuditExplorer
-└── Migrations/       → EF Core migrations versionadas
+FRONTEND                   AUTH SERVICE (8001)         MONOLITH (8888)
+   │                            │                          │
+   ├─ POST /login ────────────→│                          │
+   │                            ├─ SELECT User+Auth+Role  │
+   │                            ├─ BCrypt verify          │
+   │                            ├─ Redis: create session  │
+   │                            ├─ JWT (HS256)            │
+   │←── { token, refresh } ────│                          │
+   │                                                      │
+   ├─ GET /users (JWT) ────────────────────────────────→│
+   │                          ├─ valida JWT local        │
+   │                          ├─ checa Redis session     │
+   │                          ├─ RBAC check (permissions)│
+   │←─────────────────────────────────────────────────────│
 ```
 
-### Padrões e Práticas
+### Passo a passo
 
-- **CQRS** com MediatR — commands e queries separados por slice
-- **FluentValidation** — validação desacoplada dos handlers
-- **Registros Imutáveis** (`record`) para DTOs de request/response
-- **Soft Delete & LGPD** — exclusão lógica com anonimização
-- **RBAC Granular** — `[CheckPermission("feature", "action")]` com permissões view/create/delete/activate
-
----
-
-## Segurança
-
-### Autenticação JWT + Refresh Token
-- Tokens JWT com `jti` único, `sv` (session version) e `kid` (key id)
-- Refresh tokens armazenados em Redis por usuário (multi-device)
-- Invalidação O(1) via `SessionVersion` — desativar usuário/role invalida todas as sessões instantaneamente
-
-### Anti-Enumeração
-- Todos os endpoints de auth (`/login`, `/validate`, `/change`) retornam a **mesma mensagem genérica** independente do erro real
-- A causa real é logada internamente para o SOC
-
-### Rate Limit Distribuído
-- Limites por endpoint via Redis + Lua script atômico
-- Buckets independentes: login (5/min), password_request (3/min), export (10/min), default (100/min)
-- Headers: `x-ratelimit-limit`, `x-ratelimit-remaining`, `x-ratelimit-reset`
-- Fail-open: Redis indisponível não bloqueia requests
-
-### CORS
-- Allowlist explícita por ambiente via `CORS_ALLOWED_ORIGINS`
-- `AllowAnyOrigin` + `AllowCredentials` removido (vetor CSRF)
-
----
-
-## Observabilidade
-
-### OpenTelemetry Tracing
-- Tracing distribuído com auto-instrumentação para ASP.NET Core, EF Core, Redis e HTTP Client
-- Exportação OTLP para Jaeger/Tempo/Grafana Cloud
-- Ativado via `OTEL_ENABLED=true`
-
-### Métricas Prometheus
-- `prometheus-net` com métricas nativas do .NET (GC, CPU, ThreadPool)
-- Endpoint `/metrics` exposto para scrape
-- Dashboard Grafana pré-configurado em `docker-compose.metrics.yml`
-
-### Health Checks
-- Endpoint `/health` com checks profundos para SQL, Redis, RabbitMQ e PDF Service
-- Status individual por dependência e latência em ms
-- Resposta 200 mesmo em degraded (ideal para k8s liveness probe)
-
----
-
-## Mensageria (RabbitMQ)
-
-- **Publisher Confirms** — garantia de entrega no broker (env `RABBIT_PUBLISHER_CONFIRMS`)
-- **DLX/DLQ** — mensagens reprovadas vão para Dead Letter Queue
-- **Retry Queue** — fila com TTL de 5s e reenvio automático
-- **Prefetch Count** controlado (`RABBIT_PREFETCH_COUNT`, default 16)
-- **Message Versioning** — header `x-message-version` em todas as publicações
-- **Consumer BackgroundService** — `RabbitMQConsumerService` gerenciado pelo ASP.NET Core lifecycle
-- Desabilitável via `MESSAGING_ENABLED=false`
-
----
-
-## Performance e Banco de Dados
-
-### Índices Hot-Path
-10 índices na migration inicial para as queries mais frequentes:
-- `User.Email` (unique), `User.CognitoId`, `User.Document`, `User.IdRole`
-- `Product.Sku` (unique), `Product.Category`
-- `tb_audit` composite `(IdUser, CreatedAt)`
-
-### NoTracking por Default
-- `QueryTrackingBehavior.NoTracking` no DbContext — ganho de 20-30% em queries de leitura
-- `.AsTracking()` explícito apenas nos 12 handlers que escrevem
-- Teste de regressão `DatabaseOptimizationTests` protege contra reverter
-
-### Pipeline de Resiliência (Polly v8)
-- PDF Provider com retry (3x), circuit breaker, timeout (10s attempt, 30s total)
-- Configurável via env vars `PDF_RESILIENCE_*`
-- Aplicado a qualquer cliente HTTP via `AddStandardResilienceHandler()`
-
----
-
-## Auditoria
-
-- `AuditLogMiddleware` captura toda mutação (POST/PUT/DELETE/PATCH)
-- Fila `Channel<T>` com `BackgroundService` — sem ThreadPool starvation
-- Batching de 50 registros por transação
-- Senhas e campos sensíveis são redactados automaticamente
-- Capacidade configurável via `AUDIT_QUEUE_CAPACITY` (default 10000)
-
----
-
-## Docker
-
-### Dockerfile Multi-stage
-```dockerfile
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-jammy-chiseled AS runtime
-```
-
-Apenas ~100MB na imagem final (chiseled = sem shell, sem pacotes extras).
-
-### Graceful Shutdown
-- Timeout configurável via `SHUTDOWN_TIMEOUT_SECONDS` (default 30s)
-- `ApplicationStopping` registrado para drenar requests in-flight e desconectar RabbitMQ antes de parar
-- Logs informam início e fim do shutdown
-
-### Init-Container
-O mesmo container pode rodar como init job para migrations:
 ```bash
-docker run -e DATABASE_URL=... -e MIGRATE_ONLY=true magebackend
+# 1. Configure o auth-service
+cd auth-service-csharp
+cp .env.example .env
+# Edite .env: mesma DATABASE_URL, JWT_SECRET e REDIS_HOST do monólito
+
+# 2. Suba o auth-service (porta 8001)
+make dev
+
+# 3. No monólito, ative o modo remoto
+# backend-csharp/.env → AUTH_MODE=remote
+
+# 4. Frontend passa a chamar:
+#   - POST /v1/auth/login        → auth-service (8001)
+#   - POST /v1/auth/refresh      → auth-service (8001)
+#   - POST /v1/auth/logout       → auth-service (8001)
+#   - Demais endpoints           → monólito (8888)
+
+# 5. Pronto! O JWT emitido pelo auth-service é aceito pelo monólito.
+```
+
+### O que muda no monólito
+
+| Componente | Antes (monolito) | Depois (auth-service) |
+|---|---|---|
+| `/v1/auth/*` endpoints | Handler local | ❌ Remove (404 via middleware) |
+| Middleware JWT | `JwtAuthenticationMiddleware` | ✅ **Igual** |
+| Middleware RBAC | `TokenSessionValidationMiddleware` | ✅ **Igual** |
+| Session version (Redis) | `session:user:{id}:*` | ✅ **Igual** |
+| Tabela `Auth` | EF Core `ApplicationDbContext` | ✅ **Igual** (compartilhada) |
+
+---
+
+## 🏁 Começando
+
+```bash
+# 1. Suba infraestrutura (ou use a do monólito)
+make infra-up
+
+# 2. Configure o ambiente
+cp .env.example .env
+
+# 3. Inicie o servidor
+make dev
+```
+
+### Variáveis de ambiente
+
+```bash
+PORT=8001
+DATABASE_URL="Server=localhost,1433;Database=backend_c_sharp;..."
+JWT_SECRET=86941813-8b97-4cad-b0b2-f97734a947d7
+REDIS_HOST="redis://localhost:6379"
 ```
 
 ---
 
-## Instalação e Execução Local
+## 📡 Endpoints
 
-### Pré-requisitos
-- .NET 10 SDK
-- Docker & Docker Compose
-- EF Core CLI: `dotnet tool install --global dotnet-ef`
-
-### Setup
-```bash
-make setup                # Ferramentas locais + Husky hooks
-dotnet restore src        # Dependências NuGet
-make infra-up             # SQL + Redis + RabbitMQ
-make db-migrate           # Aplica migrations
-make dev                  # Inicia com Hot Reload em :8888
-```
-
-### Stack de Observabilidade
-```bash
-make metrics-up           # Prometheus + Grafana (localhost:3001)
-```
-
-### Ambiente
-Configure o `.env` na raiz:
-```env
-PORT=8888
-DATABASE_URL="Server=localhost,1433;..."
-REDIS_URL="localhost:6379"
-RABBIT_URL="amqp://guest:guest@localhost:5672/"
-MESSAGING_ENABLED=true
-JWT_SECRET="sua-chave-secreta-aqui"
-CORS_ALLOWED_ORIGINS="http://localhost:3000,http://localhost:4200"
-```
+| Método | Rota | Auth | Descrição |
+|--------|------|------|-----------|
+| POST | `/v1/auth/login` | ❌ | Login (email + password) |
+| POST | `/v1/auth/refresh` | ❌ | Renova par de tokens |
+| POST | `/v1/auth/logout` | ✅ | Revoga sessão |
+| GET | `/v1/auth/me` | ✅ | Dados do usuário logado |
+| POST | `/v1/auth/password/request` | ❌ | Solicita reset de senha |
+| POST | `/v1/auth/password/validate` | ❌ | Valida token de reset |
+| POST | `/v1/auth/password/change` | ❌ | Altera senha |
+| GET | `/v1/auth/.well-known/jwks.json` | ❌ | JWKS (placeholder RS256) |
+| GET | `/health` | ❌ | Health check |
+| GET | `/liveness` | ❌ | Liveness probe |
+| GET | `/ready` | ❌ | Readiness probe |
 
 ---
 
-## Testes
+## 🧪 Testes
 
-### Suíte completa (358 testes)
 ```bash
-make test                 # Testes com Testcontainers (SQL/Redis/RabbitMQ)
+# Testes unitários e de integração
+make test
+
+# Cobertura
+make coverage
 ```
 
-### Cobertura
+### Compliance (E2E com monólito)
+
 ```bash
-make coverage             # Coverlet > 99% line coverage
+cd ../mage-backend-compliance
+
+# Modo monolítico
+cp .env.csharp .env
+make test-csharp
+
+# Modo microsserviço
+cp .env.auth.csharp .env
+make test-auth-csharp
 ```
-
-### Qualidade
-```bash
-make lint                 # Husky + dotnet format + verificação de comentários
-make sonar                # SonarQube scan (requer servidor em :9000)
-```
-
-### Compliance E2E
-```bash
-# Projeto separado: mage-backend-compliance
-make test-c-sharp         # 50 testes de ponta a ponta
-```
-
----
-
-## Comandos Úteis (Makefile)
-
-| Comando | Descrição |
-|---|---|
-| `make infra-up` | Sobe SQL + Redis + RabbitMQ |
-| `make dev` | Hot Reload em :8888 |
-| `make test` | Testes com Testcontainers |
-| `make coverage` | Testes + relatório Coverlet |
-| `make lint` | Verifica comentários `//` + dotnet format |
-| `make db-migrate` | Aplica migrations EF Core |
-| `make migration name=...` | Cria nova migration |
-| `make generate name=...` | Scaffold de CRUD completo |
-| `make generate-storage` | Scaffold de Storage Provider |
-| `make metrics-up` | Prometheus + Grafana |
-| `make sonar` | SonarQube scan |
-| `make setup` | Instala ferramentas + hooks |
-
----
-
-## Qualidade e CI/CD
-
-### SonarQube Quality Gate
-- `new_coverage >= 80%` ✅
-- `new_duplicated_lines_density <= 3%` ✅
-- `new_violations = 0` ✅
-- `caycStatus = compliant` ✅
-
-### GitHub Actions
-- CI roda lint + testes + build em cada PR para main/develop
-- SonarQube Scan integrado (token via `SONAR_TOKEN`)
-
-### Pre-commit Hook (Husky)
-- Bloqueia `// comments` no código-fonte (use `/* */` ou `///`)
-- `dotnet format --verify-no-changes` — formatação consistente
