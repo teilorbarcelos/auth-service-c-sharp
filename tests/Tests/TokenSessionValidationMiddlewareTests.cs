@@ -22,90 +22,108 @@ namespace MageBackend.Tests
         [Fact]
         public async Task PublicPath_Login_SkipsValidation()
         {
-            var context = MakeContext("/v1/auth/login");
-            var middleware = new TokenSessionValidationMiddleware(_ => Task.CompletedTask);
-            await middleware.InvokeAsync(context);
-            Assert.Equal(200, context.Response.StatusCode);
+            var result = await RunMiddleware("/v1/auth/login");
+            Assert.Equal(200, result.StatusCode);
         }
 
         [Fact]
         public async Task PublicPath_Health_SkipsValidation()
         {
-            var context = MakeContext("/health");
-            var middleware = new TokenSessionValidationMiddleware(_ => Task.CompletedTask);
-            await middleware.InvokeAsync(context);
-            Assert.Equal(200, context.Response.StatusCode);
+            var result = await RunMiddleware("/health");
+            Assert.Equal(200, result.StatusCode);
         }
 
         [Fact]
         public async Task PublicPath_PasswordReset_SkipsValidation()
         {
-            var context = MakeContext("/v1/auth/password/request");
-            var middleware = new TokenSessionValidationMiddleware(_ => Task.CompletedTask);
-            await middleware.InvokeAsync(context);
-            Assert.Equal(200, context.Response.StatusCode);
+            var result = await RunMiddleware("/v1/auth/password/request");
+            Assert.Equal(200, result.StatusCode);
         }
 
         [Fact]
-        public async Task UnauthenticatedRequest_PassesThrough()
+        public async Task Authenticated_WithValidSession_PassesThrough()
         {
-            var context = MakeContext("/v1/user");
+            var (db, context) = CreateDbContext();
+            var auth = new Auth { Id = "a1", Password = "hash", Active = true, SessionVersion = 5 };
+            db.Auth.Add(auth);
+            db.User.Add(new User { Id = "u1", Name = "T", Email = "t@t.com", IdRole = "admin", Active = true, IdAuth = "a1" });
+            await db.SaveChangesAsync();
+
+            var redis = RedisProvider.Database;
+            await redis.StringSetAsync("session:user:u1:version", "5", TimeSpan.FromDays(7));
+
+            SetupUser(context, "u1", "5");
             var middleware = new TokenSessionValidationMiddleware(_ => Task.CompletedTask);
             await middleware.InvokeAsync(context);
             Assert.Equal(200, context.Response.StatusCode);
+            db.Dispose();
         }
 
         [Fact]
-        public async Task AuthenticatedRequest_WithValidSession_PassesThrough()
+        public async Task Authenticated_WithStaleSession_Rejects()
         {
-            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-                .UseInMemoryDatabase($"tsv_{Guid.NewGuid()}")
-                .Options;
-            var ctx = new ApplicationDbContext(options);
-            var auth = new Auth { Id = "a1", Password = "hash", Active = true, SessionVersion = 1 };
-            ctx.Auth.Add(auth);
-            ctx.User.Add(new User { Id = "u1", Name = "T", Email = "t@t.com", IdRole = "admin", Active = true, IdAuth = "a1" });
-            ctx.SaveChanges();
+            var (db, context) = CreateDbContext();
+            var auth = new Auth { Id = "a1", Password = "hash", Active = true, SessionVersion = 5 };
+            db.Auth.Add(auth);
+            db.User.Add(new User { Id = "u1", Name = "T", Email = "t@t.com", IdRole = "admin", Active = true, IdAuth = "a1" });
+            await db.SaveChangesAsync();
 
-            var redisDb = RedisProvider.Database;
-            await redisDb.StringSetAsync($"session:user:u1:version", "1", TimeSpan.FromDays(7));
+            var redis = RedisProvider.Database;
+            await redis.StringSetAsync("session:user:u1:version", "10", TimeSpan.FromDays(7));
 
-            var context = MakeContext("/v1/user", withUser: true, dbContext: ctx);
+            SetupUser(context, "u1", "5");
             var middleware = new TokenSessionValidationMiddleware(_ => Task.CompletedTask);
             await middleware.InvokeAsync(context);
-            Assert.Equal(200, context.Response.StatusCode);
 
-            ctx.Dispose();
+            Assert.NotEqual(200, context.Response.StatusCode);
+            db.Dispose();
         }
 
-        private static DefaultHttpContext MakeContext(string path, bool withUser = false, ApplicationDbContext? dbContext = null)
+        [Fact]
+        public async Task Unauthenticated_PassesThrough()
+        {
+            var result = await RunMiddleware("/v1/user");
+            Assert.Equal(200, result.StatusCode);
+        }
+
+        private static async Task<(int StatusCode, string? Body)> RunMiddleware(string path)
         {
             var context = new DefaultHttpContext();
             context.Request.Path = path;
             context.Response.Body = new MemoryStream();
+            context.User = new ClaimsPrincipal(new ClaimsIdentity());
 
-            if (withUser)
-            {
-                var identity = new ClaimsIdentity(new[]
-                {
-                    new Claim("id", "u1"),
-                    new Claim("sv", "1")
-                }, "jwt");
-                context.User = new ClaimsPrincipal(identity);
-            }
-            else
-            {
-                context.User = new ClaimsPrincipal(new ClaimsIdentity());
-            }
+            var middleware = new TokenSessionValidationMiddleware(_ => Task.CompletedTask);
+            await middleware.InvokeAsync(context);
 
-            if (dbContext != null)
-            {
-                var services = new ServiceCollection();
-                services.AddSingleton(dbContext);
-                context.RequestServices = services.BuildServiceProvider();
-            }
+            return (context.Response.StatusCode, null);
+        }
 
-            return context;
+        private static (ApplicationDbContext db, DefaultHttpContext context) CreateDbContext()
+        {
+            var options = new DbContextOptionsBuilder<ApplicationDbContext>()
+                .UseInMemoryDatabase($"tsm_{Guid.NewGuid()}")
+                .Options;
+            var db = new ApplicationDbContext(options);
+            var services = new ServiceCollection();
+            services.AddSingleton(db);
+
+            var context = new DefaultHttpContext();
+            context.Request.Path = "/v1/user";
+            context.Response.Body = new MemoryStream();
+            context.RequestServices = services.BuildServiceProvider();
+
+            return (db, context);
+        }
+
+        private static void SetupUser(DefaultHttpContext context, string userId, string sv)
+        {
+            var identity = new ClaimsIdentity(new[]
+            {
+                new Claim("id", userId),
+                new Claim("sv", sv)
+            }, "jwt");
+            context.User = new ClaimsPrincipal(identity);
         }
     }
 }
