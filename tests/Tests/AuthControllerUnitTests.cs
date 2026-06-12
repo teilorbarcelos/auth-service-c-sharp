@@ -49,7 +49,7 @@ namespace MageBackend.Tests
         [Fact]
         public void OnAuthorization_WithoutUser_Throws()
         {
-            var ctx = CreateCtx(new Claim[0]);
+            var ctx = CreateCtx(Array.Empty<Claim>());
             Assert.Throws<AppException>(() => new AuthorizeAdminAttribute().OnAuthorization(ctx));
         }
 

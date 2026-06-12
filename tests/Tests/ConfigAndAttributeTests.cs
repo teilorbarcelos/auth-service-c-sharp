@@ -37,7 +37,7 @@ namespace MageBackend.Tests
         [Fact]
         public void OnAuthorization_WithoutUser_Throws()
         {
-            var ctx = CreateContext(new Claim[0]);
+            var ctx = CreateContext(Array.Empty<Claim>());
             var attr = new CheckPermissionAttribute("any", "view");
             Assert.Throws<AppException>(() => attr.OnAuthorization(ctx));
         }

@@ -78,11 +78,12 @@ namespace MageBackend.Tests
         }
 
         [Fact]
-        public void VerifyToken_ShouldHandleExpiredToken()
+        public async Task VerifyToken_ShouldHandleExpiredToken()
         {
             var token = _provider.GenerateToken(_payload, TimeSpan.FromMilliseconds(1));
-            Thread.Sleep(50);
-            Assert.Throws<UnauthorizedAccessException>(() => _provider.VerifyToken(token));
+            await Task.Delay(50);
+            await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+                Task.Run(() => _provider.VerifyToken(token)));
         }
     }
 }

@@ -19,7 +19,7 @@ namespace MageBackend.Tests
             var token = _jwtProvider.GenerateToken(payload, TimeSpan.FromHours(1));
 
             var context = new DefaultHttpContext();
-            context.Request.Headers["Authorization"] = $"Bearer {token}";
+            context.Request.Headers.Authorization = $"Bearer {token}";
             context.Response.Body = new MemoryStream();
 
             var middleware = new JwtAuthenticationMiddleware(_ => Task.CompletedTask);
@@ -34,7 +34,7 @@ namespace MageBackend.Tests
         public async Task WithInvalidToken_DoesNotSetUser()
         {
             var context = new DefaultHttpContext();
-            context.Request.Headers["Authorization"] = "Bearer invalid-token";
+            context.Request.Headers.Authorization = "Bearer invalid-token";
             context.Response.Body = new MemoryStream();
 
             var middleware = new JwtAuthenticationMiddleware(_ => Task.CompletedTask);

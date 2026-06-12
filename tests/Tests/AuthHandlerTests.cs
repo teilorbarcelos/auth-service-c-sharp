@@ -19,7 +19,7 @@ namespace MageBackend.Tests
             RedisProvider.Initialize("redis://localhost:6379");
         }
 
-        private ApplicationDbContext CreateContext()
+        private static ApplicationDbContext CreateContext()
         {
             var options = new DbContextOptionsBuilder<ApplicationDbContext>()
                 .UseInMemoryDatabase($"h_{Guid.NewGuid()}")
@@ -34,7 +34,8 @@ namespace MageBackend.Tests
         {
             using var ctx = CreateContext();
             var handler = new LogoutHandler(ctx);
-            await handler.Handle(new LogoutCommand(null), CancellationToken.None);
+            var result = await handler.Handle(new LogoutCommand(null), CancellationToken.None);
+            Assert.Equal(MediatR.Unit.Value, result);
         }
 
         // ===== ChangePassword =====
@@ -77,10 +78,12 @@ namespace MageBackend.Tests
             Assert.False(result.Success);
         }
 
+#pragma warning disable xUnit1004
         [Fact(Skip = "Requires real SQL Server (ExecuteUpdateAsync not supported by InMemory)")]
         public async Task ChangePasswordHandler_Success_UpdatesPassword()
         {
         }
+#pragma warning restore xUnit1004
 
         // ===== ValidateResetToken =====
 

@@ -35,7 +35,7 @@ namespace MageBackend.Features.Auth
 
             var refreshBytes = Encoding.UTF8.GetBytes(tokens.RefreshToken);
             var refreshHashBytes = SHA256.HashData(refreshBytes);
-            var refreshTokenHash = Convert.ToHexString(refreshHashBytes).ToLower();
+            var refreshTokenHash = Convert.ToHexStringLower(refreshHashBytes);
 
             var redisDb = RedisProvider.Database;
 

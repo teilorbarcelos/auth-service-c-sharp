@@ -27,7 +27,7 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    Log.Information("Starting Auth Service...");
+    Log.Debug("Starting Auth Service...");
 
     var builder = WebApplication.CreateBuilder(args);
 
@@ -122,12 +122,14 @@ try
         await DbInitializer.InitializeAsync(dbContext);
     }
 
-    Log.Information("Server ready at http://localhost:{Port} | Docs: http://localhost:{Port}/v1/docs", port, port);
+    var serverUrl = $"http://localhost:{port}";
+    Log.Information("Server ready at {ServerUrl} | Docs: {ServerUrl}/v1/docs", serverUrl, serverUrl);
 
     await app.RunAsync();
 }
 catch (Exception ex) when (ex.GetType().Name == "HostAbortedException")
 {
+    /* Empty catch: EF Core tooling uses this to abort the host */
 }
 catch (Exception ex)
 {
