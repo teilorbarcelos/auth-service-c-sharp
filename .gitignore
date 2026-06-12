@@ -43,3 +43,4 @@ tests/TestResults/
 run-sonar.sh
 TODO.md
 .scannerwork/
+coverage/
