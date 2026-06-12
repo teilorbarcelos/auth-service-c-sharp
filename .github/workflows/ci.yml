@@ -35,5 +35,5 @@ jobs:
     - name: Build Tests Project
       run: dotnet build tests/MageBackend.Tests.csproj --configuration Debug --no-restore
 
-    - name: Run Integration & Unit Tests
-      run: dotnet test tests/MageBackend.Tests.csproj -m:1 --configuration Debug --no-restore
+    - name: Run Tests with Coverage
+      run: dotnet test tests/MageBackend.Tests.csproj -m:1 --configuration Debug --no-restore /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:CoverletOutput=./tests/coverage.cobertura.xml
