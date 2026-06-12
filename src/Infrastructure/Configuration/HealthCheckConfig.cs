@@ -17,17 +17,12 @@ namespace MageBackend.Infrastructure.Configuration
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
-        private static readonly string[] RabbitMqTags = ["rabbitmq"];
-        private static readonly string[] PdfTags = ["pdf"];
-
         [ExcludeFromCodeCoverage]
         public static IServiceCollection AddAppHealthChecks(this IServiceCollection services)
         {
             services.AddHealthChecks()
                 .AddCheck<SqlHealthCheck>("sql")
-                .AddCheck<RedisHealthCheck>("redis")
-                .AddCheck<RabbitMqHealthCheck>("rabbitmq", tags: RabbitMqTags)
-                .AddCheck<PdfHealthCheck>("pdf", tags: PdfTags);
+                .AddCheck<RedisHealthCheck>("redis");
 
             return services;
         }
