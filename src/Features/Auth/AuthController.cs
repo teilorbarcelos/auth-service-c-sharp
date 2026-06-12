@@ -105,8 +105,8 @@ namespace MageBackend.Features.Auth
                 throw new FluentValidation.ValidationException(validationResult.Errors);
             }
 
-            await _mediator.Send(new RequestPasswordResetCommand(dto.Email));
-            return Ok(new { message = "E-mail de recuperação enviado com sucesso!" });
+            var result = await _mediator.Send(new RequestPasswordResetCommand(dto.Email));
+            return Ok(new { message = "If the email exists, a reset token has been generated", resetToken = result });
         }
 
         [HttpPost("password/validate")]
@@ -154,6 +154,13 @@ namespace MageBackend.Features.Auth
             var userId = User.FindFirst("id")?.Value;
             await _mediator.Send(new LogoutCommand(userId));
             return Ok(new { message = "Logout realizado com sucesso!" });
+        }
+
+        [HttpGet(".well-known/jwks.json")]
+        [ProducesResponseType(200)]
+        public IActionResult Jwks()
+        {
+            return Ok(new { keys = Array.Empty<object>() });
         }
     }
 

@@ -6,9 +6,9 @@ using System.Security.Cryptography;
 
 namespace MageBackend.Features.Auth.Commands
 {
-    public record RequestPasswordResetCommand(string Email) : IRequest<Unit>;
+    public record RequestPasswordResetCommand(string Email) : IRequest<string>;
 
-    public class RequestPasswordResetHandler : IRequestHandler<RequestPasswordResetCommand, Unit>
+    public class RequestPasswordResetHandler : IRequestHandler<RequestPasswordResetCommand, string>
     {
         private readonly ApplicationDbContext _context;
 
@@ -17,7 +17,7 @@ namespace MageBackend.Features.Auth.Commands
             _context = context;
         }
 
-        public async Task<Unit> Handle(RequestPasswordResetCommand command, CancellationToken cancellationToken)
+        public async Task<string> Handle(RequestPasswordResetCommand command, CancellationToken cancellationToken)
         {
             var user = await _context.User
                 .Include(u => u.Auth)
@@ -35,9 +35,10 @@ namespace MageBackend.Features.Auth.Commands
 
                 await _context.SaveChangesAsync(cancellationToken);
                 Log.Information("[PasswordReset] Reset code for {Email}: {ResetToken}", command.Email, resetToken);
+                return resetToken;
             }
 
-            return Unit.Value;
+            return string.Empty;
         }
     }
 }
