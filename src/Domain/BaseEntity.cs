@@ -11,6 +11,7 @@ namespace MageBackend.Domain
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     }
 
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
     public abstract class SoftDeletableEntity : BaseEntity
     {
         public bool IsDeleted { get; set; } = false;

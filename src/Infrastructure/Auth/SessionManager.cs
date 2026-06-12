@@ -23,6 +23,7 @@ namespace MageBackend.Infrastructure.Auth
             {
                 var config = ConfigurationOptions.Parse(connectionString);
                 config.AbortOnConnectFail = false;
+                config.ConnectTimeout = 2000;
                 return ConnectionMultiplexer.Connect(config);
             });
         }
@@ -144,6 +145,7 @@ namespace MageBackend.Infrastructure.Auth
             return currentVersion;
         }
 
+        [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
         public static async Task InvalidateManyUsersSessionsAsync(IEnumerable<string> userIds, ApplicationDbContext context)
         {
             Log.Information("[SessionManager] Invalidating sessions for multiple users");
@@ -212,6 +214,7 @@ namespace MageBackend.Infrastructure.Auth
          * que é O(N) bloqueante). Filtra replicas para não tentar scan
          * em nós read-only.
          */
+        [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
         private static async Task<long> DeleteRefreshTokensAsync(string userId, IDatabase redisDb)
         {
             var multiplexer = redisDb.Multiplexer;

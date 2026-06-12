@@ -10,7 +10,7 @@ RUN dotnet publish -c Release -o /app/publish --no-restore
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-jammy-chiseled AS runtime
 WORKDIR /app
 
-EXPOSE 8888
+EXPOSE 8001
 
 COPY --from=build /app/publish .
 COPY entrypoint.sh /entrypoint.sh

@@ -3,25 +3,16 @@ using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MageBackend.Web;
-using MageBackend.Infrastructure.Auditing;
 using MageBackend.Infrastructure.Configuration;
 using MageBackend.Database;
 using MageBackend.Infrastructure.Auth;
 using MageBackend.Web.Middleware;
-using Prometheus;
-using Prometheus.DotNetRuntime;
-using OpenTelemetry.Trace;
 using FluentValidation;
-using MageBackend.Infrastructure.Messaging;
-using MageBackend.Infrastructure.Storage;
-using MageBackend.Infrastructure.Pdf;
 using Serilog;
 using Serilog.Events;
-using Serilog.Context;
 
 var envFiles = new[] { "../.env", ".env" };
 DotEnv.Load(options: new DotEnvOptions(envFilePaths: envFiles, ignoreExceptions: true));
-
 
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
@@ -36,15 +27,9 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    Log.Information("Starting MageBackend API...");
+    Log.Information("Starting Auth Service...");
 
     var builder = WebApplication.CreateBuilder(args);
-
-    const string testingEnv = "Testing";
-    if (builder.Environment.EnvironmentName != testingEnv)
-    {
-        DotNetRuntimeStatsBuilder.Default().StartCollecting();
-    }
 
     var shutdownTimeout = int.TryParse(Environment.GetEnvironmentVariable("SHUTDOWN_TIMEOUT_SECONDS"), out var st) && st > 0 ? st : 30;
     builder.Host.ConfigureHostOptions(o => o.ShutdownTimeout = TimeSpan.FromSeconds(shutdownTimeout));
@@ -52,7 +37,7 @@ try
 
     builder.Host.UseSerilog();
 
-    var port = Environment.GetEnvironmentVariable("PORT") ?? "8888";
+    var port = Environment.GetEnvironmentVariable("PORT") ?? "8001";
 #pragma warning disable S5332
     builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 #pragma warning restore S5332
@@ -67,29 +52,8 @@ try
     var jwtSecret = EnvValidator.Required("JWT_SECRET");
     builder.Services.AddSingleton(new JwtProvider(jwtSecret));
 
-    var rabbitUrl = EnvValidator.Required("RABBIT_URL");
-    Environment.SetEnvironmentVariable("RABBIT_URL", rabbitUrl);
-    builder.Services.AddSingleton<RabbitMQProvider>();
-    builder.Services.AddSingleton(sp =>
-    {
-        var provider = sp.GetRequiredService<RabbitMQProvider>();
-        var queue = Environment.GetEnvironmentVariable("RABBIT_CONSUMER_QUEUE") ?? "";
-        return new RabbitMQConsumerService(provider, queue);
-    });
-    builder.Services.AddHostedService(sp => sp.GetRequiredService<RabbitMQConsumerService>());
-    builder.Services.AddHttpClient<IPdfProvider, PdfProvider>()
-        .AddStandardResilienceHandler(PdfResilienceConfig.Configure);
-
     builder.Services.AddValidatorsFromAssemblyContaining<Program>();
     builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssemblyContaining<Program>());
-
-    builder.Services.AddSingleton<IAuditLogQueue, AuditLogQueue>();
-    builder.Services.AddHostedService<AuditLogBackgroundService>();
-    builder.Services.AddSingleton<MageBackend.Domain.IEntityMapper<MageBackend.Database.Product, MageBackend.Features.Product.ProductResponseDto>, MageBackend.Features.Product.ProductEntityMapper>();
-    builder.Services.AddCrudHandlers<MageBackend.Database.Product, MageBackend.Features.Product.ProductResponseDto>();
-
-    builder.Services.AddSingleton<MageBackend.Domain.IEntityMapper<MageBackend.Database.User, MageBackend.Features.User.UserResponseDto>, MageBackend.Features.User.UserEntityMapper>();
-    builder.Services.AddCrudHandlers<MageBackend.Database.User, MageBackend.Features.User.UserResponseDto>();
 
     builder.Services.AddControllers()
         .AddJsonOptions(options =>
@@ -100,37 +64,13 @@ try
 
     builder.Services.AddCors(options =>
     {
-        var allowedOrigins = CorsConfig.GetAllowedOrigins(builder.Environment.EnvironmentName);
-
         options.AddPolicy("Default", policy =>
         {
-            policy.WithOrigins(allowedOrigins.ToArray())
+            policy.AllowAnyOrigin()
                   .AllowAnyMethod()
-                  .AllowAnyHeader()
-                  .AllowCredentials();
+                  .AllowAnyHeader();
         });
     });
-
-    if (OpenTelemetryConfig.IsEnabled())
-    {
-        builder.Services.AddOpenTelemetry()
-            .WithTracing(tracing =>
-            {
-                tracing.AddAspNetCoreInstrumentation()
-                       .AddEntityFrameworkCoreInstrumentation(o => o.SetDbStatementForText = true)
-                       .AddRedisInstrumentation(RedisProvider.Connection)
-                       .AddHttpClientInstrumentation()
-                       .AddOtlpExporter(o =>
-                       {
-                           o.Endpoint = new Uri(OpenTelemetryConfig.GetOtlpEndpoint());
-                       });
-            });
-    }
-
-    if (builder.Environment.EnvironmentName != testingEnv)
-    {
-        builder.Services.AddAppHealthChecks();
-    }
 
     builder.Services.AddOpenApi(options =>
     {
@@ -146,7 +86,7 @@ try
 
     var app = builder.Build();
 
-    if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName == testingEnv)
+    if (app.Environment.IsDevelopment() || app.Environment.EnvironmentName == "Testing")
     {
         app.MapOpenApi();
         app.UseSwaggerUI(options =>
@@ -157,32 +97,24 @@ try
     }
 
     app.UseMiddleware<ErrorHandlerMiddleware>();
-
     app.UseCors("Default");
-
     app.UseMiddleware<RequestLoggingMiddleware>();
 
-    app.UseMiddleware<RateLimitMiddleware>();
+    var disableRateLimit = Environment.GetEnvironmentVariable("DISABLE_RATE_LIMIT") is string dr && (dr.Equals("true", StringComparison.OrdinalIgnoreCase) || dr == "1");
+    if (!disableRateLimit)
+    {
+        app.UseMiddleware<RateLimitMiddleware>();
+    }
 
     app.UseMiddleware<JwtAuthenticationMiddleware>();
-
     app.UseMiddleware<TokenSessionValidationMiddleware>();
-
-    app.UseMiddleware<AuditLogMiddleware>();
-
-    app.UseHttpMetrics();
 
     app.UseRouting();
     app.MapControllers();
 
-    app.MapGet("/health", async (HttpContext http) =>
-    {
-        if (app.Environment.EnvironmentName == testingEnv)
-            return Results.Ok(new { status = "UP", timestamp = DateTime.UtcNow.ToString("o") });
-
-        return await HealthCheckConfig.RunHealthChecksAsync(http);
-    });
-    app.MapMetrics();
+    app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow.ToString("o") }));
+    app.MapGet("/liveness", () => Results.Ok(new { status = "alive", uptime = Environment.TickCount64 }));
+    app.MapGet("/ready", () => Results.Ok(new { status = "ready", timestamp = DateTime.UtcNow.ToString("o") }));
 
     using (var scope = app.Services.CreateScope())
     {
@@ -190,43 +122,12 @@ try
         await DbInitializer.InitializeAsync(dbContext);
     }
 
-    var migrateOnly = Environment.GetEnvironmentVariable("MIGRATE_ONLY") is string m && (m.Equals("true", StringComparison.OrdinalIgnoreCase) || m == "1");
-    if (migrateOnly)
-    {
-        Log.Information("MIGRATE_ONLY=true — migrations applied, exiting.");
-        return;
-    }
-
-    var rabbitProvider = app.Services.GetRequiredService<RabbitMQProvider>();
-    rabbitProvider.Connect();
-
-    var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
-    lifetime.ApplicationStopping.Register(() =>
-    {
-        Log.Information("[Host] Shutdown requested — draining in-flight requests...");
-
-        try
-        {
-            var rabbit = app.Services.GetRequiredService<RabbitMQProvider>();
-            rabbit.Disconnect();
-            Log.Information("[Host] RabbitMQ disconnected");
-        }
-        catch (Exception ex)
-        {
-            Log.Warning(ex, "[Host] Error disconnecting RabbitMQ during shutdown");
-        }
-    });
-
-    Log.Information("Server ready at http://localhost:{Port} | Docs: http://localhost:{DocsPort}/v1/docs | Audit: http://localhost:{AuditPort}/admin/logs", port, port, port);
+    Log.Information("Server ready at http://localhost:{Port} | Docs: http://localhost:{Port}/v1/docs", port, port);
 
     await app.RunAsync();
 }
 catch (Exception ex) when (ex.GetType().Name == "HostAbortedException")
 {
-    /*
-     * Ignorado intencionalmente: O EF Core tooling (dotnet ef) usa essa exceção
-     * para interromper o Host logo após obter as configurações do DbContext.
-     */
 }
 catch (Exception ex)
 {

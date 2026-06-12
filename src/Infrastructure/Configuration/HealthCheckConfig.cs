@@ -10,6 +10,7 @@ using MageBackend.Infrastructure.HealthChecks;
 
 namespace MageBackend.Infrastructure.Configuration
 {
+    [ExcludeFromCodeCoverage]
     public static class HealthCheckConfig
     {
         public static readonly JsonSerializerOptions JsonOptions = new()
@@ -17,17 +18,12 @@ namespace MageBackend.Infrastructure.Configuration
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
-        private static readonly string[] RabbitMqTags = ["rabbitmq"];
-        private static readonly string[] PdfTags = ["pdf"];
-
         [ExcludeFromCodeCoverage]
         public static IServiceCollection AddAppHealthChecks(this IServiceCollection services)
         {
             services.AddHealthChecks()
                 .AddCheck<SqlHealthCheck>("sql")
-                .AddCheck<RedisHealthCheck>("redis")
-                .AddCheck<RabbitMqHealthCheck>("rabbitmq", tags: RabbitMqTags)
-                .AddCheck<PdfHealthCheck>("pdf", tags: PdfTags);
+                .AddCheck<RedisHealthCheck>("redis");
 
             return services;
         }

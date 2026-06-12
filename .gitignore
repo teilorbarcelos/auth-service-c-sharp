@@ -42,3 +42,5 @@ tests/coverage.opencover.xml
 tests/TestResults/
 run-sonar.sh
 TODO.md
+.scannerwork/
+coverage/
