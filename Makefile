@@ -1,4 +1,4 @@
-.PHONY: infra-up infra-down infra-clean dev test coverage setup lint
+.PHONY: infra-up infra-down infra-clean dev test coverage setup lint sonar
 
 infra-up:
 	docker compose -f docker-compose.infra.yml up -d
@@ -28,9 +28,16 @@ setup:
 
 lint:
 	@echo "🔍 Verificando comentários // no código-fonte..."
-	@! grep -rn '[^:/]//\|^//' src/ --include='*.cs' | grep -v '///' | grep -v '://' || \
+	 @! grep -rn '[^:/]//\|^//' src/ --include='*.cs' | grep -v '///' | grep -v '://' || \
 		(echo "❌ Encontrados comentários // no código-fonte" && exit 1)
 	@echo "✅ Nenhum comentário // encontrado"
 	@echo ""
 	@echo "🎨 Executando dotnet format..."
 	dotnet format src/MageBackend.csproj --verify-no-changes
+
+sonar:
+	@echo "📡 Subindo Redis (necessário para testes)..."
+	@docker ps --format '{{.Names}}' 2>/dev/null | grep -q 'backend_csharp_redis' || \
+		docker compose -f docker-compose.infra.yml up -d redis
+	@echo "🔍 Rodando scan do SonarQube (análise C# + cobertura)..."
+	./scripts/sonar-scan.sh "teilorbarcelos_auth-service-csharp" "Auth Service CSharp"

@@ -45,3 +45,7 @@ TODO.md
 .scannerwork/
 coverage/
 coverage.*.xml
+tests/coverage.cobertura.xml
+tests/coverage.generic.xml
+tests/coverage.opencover.xml
+tests/tests/
