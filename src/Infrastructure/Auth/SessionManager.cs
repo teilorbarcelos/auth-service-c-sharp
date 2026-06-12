@@ -23,6 +23,7 @@ namespace MageBackend.Infrastructure.Auth
             {
                 var config = ConfigurationOptions.Parse(connectionString);
                 config.AbortOnConnectFail = false;
+                config.ConnectTimeout = 2000;
                 return ConnectionMultiplexer.Connect(config);
             });
         }
