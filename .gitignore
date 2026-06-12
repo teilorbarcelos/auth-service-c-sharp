@@ -44,3 +44,4 @@ run-sonar.sh
 TODO.md
 .scannerwork/
 coverage/
+coverage.*.xml
