@@ -6,7 +6,7 @@ PROJECT_NAME="${2:-Auth Service CSharp}"
 TESTS_PROJECT="${TESTS_PROJECT:-tests/MageBackend.Tests.csproj}"
 TEST_TIMEOUT="${TEST_TIMEOUT:-900}"
 EXCLUSIONS="${EXCLUSIONS:-**/Migrations/**,**/obj/**,**/bin/**}"
-SONAR_TOKEN="${SONAR_TOKEN:-squ_20f4835a20b16839fe7a52b4d43ff97224e640d1}"
+SONAR_TOKEN="${SONAR_TOKEN:-squ_733ffb0b40e059b7a5f353a7f16c2896cb8e7052}"
 SONAR_HOST="${SONAR_HOST:-http://localhost:9000}"
 SCANNER_BIN="${SCANNER_BIN:-/home/teilor/.sonar/native-sonar-scanner/sonar-scanner-6.2.1.4610-linux-x64/bin/sonar-scanner}"
 
