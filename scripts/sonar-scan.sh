@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-PROJECT_KEY="${1:-teilorbarcelos_auth-service-csharp}"
+PROJECT_KEY="${1:-auth-service-csharp}"
 PROJECT_NAME="${2:-Auth Service CSharp}"
 TESTS_PROJECT="${TESTS_PROJECT:-tests/MageBackend.Tests.csproj}"
 TEST_TIMEOUT="${TEST_TIMEOUT:-900}"

@@ -40,4 +40,4 @@ sonar:
 	@docker ps --format '{{.Names}}' 2>/dev/null | grep -q 'backend_csharp_redis' || \
 		docker compose -f docker-compose.infra.yml up -d redis
 	@echo "🔍 Rodando scan do SonarQube (análise C# + cobertura)..."
-	./scripts/sonar-scan.sh "teilorbarcelos_auth-service-csharp" "Auth Service CSharp"
+	./scripts/sonar-scan.sh "auth-service-csharp" "Auth Service CSharp"

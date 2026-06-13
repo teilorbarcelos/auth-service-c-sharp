@@ -92,4 +92,4 @@ jobs:
         LC_ALL: C.UTF-8
       run: |
         export PATH="$PATH:$HOME/.dotnet/tools"
-        ./scripts/sonar-scan.sh "teilorbarcelos_auth-service-csharp" "Auth Service CSharp"
+        ./scripts/sonar-scan.sh "auth-service-csharp" "Auth Service CSharp"
