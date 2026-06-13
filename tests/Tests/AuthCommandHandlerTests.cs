@@ -18,7 +18,7 @@ namespace MageBackend.Tests
             RedisProvider.Initialize("redis://localhost:6379");
         }
 
-        private ApplicationDbContext CreateContext()
+        private static ApplicationDbContext CreateContext()
         {
             var options = new DbContextOptionsBuilder<ApplicationDbContext>()
                 .UseInMemoryDatabase($"auth_{Guid.NewGuid()}")

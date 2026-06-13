@@ -99,6 +99,7 @@ namespace MageBackend.Tests
             using var ctx = new ApplicationDbContext(options);
 
             await SessionManager.InvalidateManyUsersSessionsAsync(new List<string>(), ctx);
+            Assert.Empty(await ctx.User.ToListAsync());
         }
     }
 }

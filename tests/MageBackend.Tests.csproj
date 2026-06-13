@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <ProjectGuid>{7C6D46F7-BE39-4953-B114-5174BEAE633F}</ProjectGuid>
   </PropertyGroup>
 
   <!-- Coverlet coverage settings -->

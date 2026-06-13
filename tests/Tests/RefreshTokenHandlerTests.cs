@@ -62,10 +62,9 @@ namespace MageBackend.Tests
             var token = _jwtProvider.GenerateToken(payload, TimeSpan.FromDays(7));
 
             // Set the Redis key to pass first check
-            var tokenHash = BitConverter.ToString(
+            var tokenHash = Convert.ToHexStringLower(
                 System.Security.Cryptography.SHA256.HashData(
-                    System.Text.Encoding.UTF8.GetBytes(token))
-            ).Replace("-", "").ToLower();
+                    System.Text.Encoding.UTF8.GetBytes(token)));
             var redis = RedisProvider.Database;
             await redis.StringSetAsync($"session:user:nonexistent:refresh:{tokenHash}", "1", TimeSpan.FromDays(7));
             await redis.StringSetAsync("session:user:nonexistent:version", "1", TimeSpan.FromDays(7));
@@ -76,7 +75,9 @@ namespace MageBackend.Tests
             Assert.False(result.Success);
         }
 
+#pragma warning disable xUnit1004
         [Fact(Skip = "Requires real SQL Server (ExecuteUpdateAsync in InvalidateUserSessionsAsync)")]
         public async Task Handle_FullSuccessPath() { }
+#pragma warning restore xUnit1004
     }
 }
